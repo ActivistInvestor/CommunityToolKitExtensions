@@ -4,6 +4,7 @@
 /// types from CommunityToolkit.Mvvm.Input
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using Autodesk.AutoCAD.Runtime;
 
@@ -60,14 +61,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// TT: Modified to execute in document execution context
       public void Execute(object? parameter)
       {
-         var doc = Application.DocumentManager;
-         if(doc.MdiActiveDocument == null)
-            throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
-         doc.ExecuteInCommandContextAsync((_) =>
-         {
-            execute();
-            return Task.CompletedTask;
-         }, null);
+         CommandContext.Invoke(execute);
       }
    }
 
@@ -113,7 +107,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public void Execute(T? parameter)
       {
-         this.execute(parameter);
+         CommandContext.Invoke(execute, parameter);
       }
 
       /// TT: Modified to execute in document execution context
@@ -123,14 +117,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          {
             ThrowArgumentExceptionForInvalidCommandArgument(parameter);
          }
-         var doc = Application.DocumentManager;
-         if(doc.MdiActiveDocument == null)
-            throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
-         doc.ExecuteInCommandContextAsync((_) =>
-         {
-            Execute(result);
-            return Task.CompletedTask;
-         }, null);
+         CommandContext.Invoke(execute, result);
       }
 
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -163,6 +150,49 @@ namespace Autodesk.AutoCAD.ApplicationServices
             return new ArgumentException($"Parameter \"{nameof(parameter)}\" (object) cannot be of type {parameter.GetType()}, as the command type requires an argument of type {typeof(T)}.", nameof(parameter));
          }
          throw GetException(parameter);
+      }
+   }
+
+   static class CommandContext
+   {
+      public static void Invoke<T>(Action<T> action, T? parameter)
+      {
+         ArgumentNullException.ThrowIfNull(action);
+         var docs = Application.DocumentManager;
+         if(docs.MdiActiveDocument == null)
+            throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
+         if(docs.IsApplicationContext)
+         {
+            docs.ExecuteInCommandContextAsync((_) =>
+            {
+               action(parameter);
+               return Task.CompletedTask;
+            }, null);
+         }
+         else
+         {
+            action(parameter);
+         }
+      }
+
+      public static void Invoke(Action action)
+      {
+         ArgumentNullException.ThrowIfNull(action);
+         var docs = Application.DocumentManager;
+         if(docs.MdiActiveDocument == null)
+            throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
+         if(docs.IsApplicationContext)
+         {
+            docs.ExecuteInCommandContextAsync((_) =>
+            {
+               action();
+               return Task.CompletedTask;
+            }, null);
+         }
+         else
+         {
+            action();
+         }
       }
    }
 
