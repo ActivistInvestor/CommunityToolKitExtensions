@@ -34,7 +34,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// active document.
    /// 
    /// Note that when your command executes, any currently-active 
-   /// command(s) will be cancelled.
+   /// command(s) will be cancelled. You can prevent your command
+   /// from executing when a command is in progress by checking the
+   /// CommandContext.IsQuiescent property and factor it into the
+   /// the result of CanExecute() or the delegate passed to the
+   /// constructor.
    /// 
    /// Roadmap:
    /// 
@@ -201,6 +205,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public static bool CanInvoke =>
          Application.DocumentManager.MdiActiveDocument != null;
 
+      public static bool IsQuiescent =>
+         CanInvoke && Application.DocumentManager.MdiActiveDocument.Editor.IsQuiescent;
+
       public static async void Invoke<T>(Action<T?> action, T? parameter)
       {
          ArgumentNullException.ThrowIfNull(action);
@@ -250,7 +257,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
    {
    }
 
-   public interface IDocumentRelayCommand<in T> : IDocumentRelayCommand
+   public interface IDocumentRelayCommand<in T> : IRelayCommand<T>
    {
    }
 
