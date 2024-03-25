@@ -49,6 +49,29 @@ namespace Autodesk.AutoCAD.ApplicationServices
    ///         to disallow reentry (only needed if the
    ///         first item above is not implemented).
    ///         
+   /// Best practices for implementing command functionality 
+   /// in MVVM scenarios:
+   /// 
+   /// It is wise to avoid placing command implementation code
+   /// directly in an anonymous delegate passed to the constructor
+   /// of an ICommand, because that prevents use of the code from
+   /// various other non-UI contexts, such as making it available
+   /// as a CommandMethod the user can invoke on the command line.
+   /// 
+   /// To make an implementation usable from various other contexts,
+   /// it can be housed in a separate (possibly static), class that 
+   /// allows it to be accessed from an ICommand, as well as from a 
+   /// CommandMethod.
+   /// 
+   /// Note that in the code below, the AutoCAD-dependent code has
+   /// been decoupled from the IDocumentRelayCommand implementations
+   /// to support that same type of separation, and is what allows 
+   /// the AutoCAD-specific code (in the CommandContext class) to be 
+   /// accessable and usable from various other contexts. This also
+   /// serves to prevent potential design-time failures from occuring 
+   /// due to AutoCAD types appearing in code that may be jit'ed at 
+   /// design-time.
+   /// 
    /// </summary>
 
    public class DocumentRelayCommand : IDocumentRelayCommand
