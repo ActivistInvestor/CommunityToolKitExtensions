@@ -54,8 +54,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public bool CanExecute(object? parameter)
       {
-         bool hasdoc = Application.DocumentManager.MdiActiveDocument != null;
-         return hasdoc && this.canExecute?.Invoke() != false;
+         return CommandContext.CanInvoke && this.canExecute?.Invoke() != false;
       }
 
       /// TT: Modified to execute in document execution context
@@ -87,12 +86,14 @@ namespace Autodesk.AutoCAD.ApplicationServices
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public bool CanExecute(T? parameter)
       {
-         bool hasdoc = Application.DocumentManager.MdiActiveDocument != null;
-         return hasdoc && this.canExecute?.Invoke(parameter) != false;
+         return CommandContext.CanInvoke 
+            && this.canExecute?.Invoke(parameter) != false;
       }
 
       public bool CanExecute(object? parameter)
       {
+         if(!CommandContext.CanInvoke)
+            return false;
          if(parameter is null && default(T) is not null)
          {
             return false;
@@ -155,12 +156,15 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
    static class CommandContext
    {
-      public static async void Invoke<T>(Action<T> action, T? parameter)
+      public static bool CanInvoke =>
+         Application.DocumentManager.MdiActiveDocument != null;
+
+      public static async void Invoke<T>(Action<T?> action, T? parameter)
       {
          ArgumentNullException.ThrowIfNull(action);
-         var docs = Application.DocumentManager;
-         if(docs.MdiActiveDocument == null)
+         if(!CanInvoke)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
+         var docs = Application.DocumentManager;
          if(docs.IsApplicationContext)
          {
             await docs.ExecuteInCommandContextAsync((_) =>
@@ -178,9 +182,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public static async void Invoke(Action action)
       {
          ArgumentNullException.ThrowIfNull(action);
-         var docs = Application.DocumentManager;
-         if(docs.MdiActiveDocument == null)
+         if(!CanInvoke)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
+         var docs = Application.DocumentManager;
          if(docs.IsApplicationContext)
          {
             await docs.ExecuteInCommandContextAsync((_) =>
