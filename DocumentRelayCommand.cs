@@ -5,6 +5,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using CommunityToolkit.Mvvm.Input;
 
@@ -19,13 +21,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// allowing them to also replace ICommand-based types.
    /// 
    /// If you are currently using RelayCommand or RelayCommand<T>
-   /// from CommunityToolkit.Mvvm, or you are using ICommand from 
-   /// System.Windows.Input, you can easily migrate your code to 
-   /// these types by making the following changes:
+   /// from CommunityToolkit.Mvvm you can easily migrate your code 
+   /// to these types by making the following changes:
    /// 
    ///    Replace:          With:
    ///    -------------------------------------------------
-   ///    ICommand          DocumentRelayCommand
    ///    RelayCommand      DocumentRelayCommand
    ///    RelayCommand<T>   DocumentRelayCommand<T>
    ///    
@@ -44,9 +44,23 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// the result of CanExecute() or the delegate passed to the
    /// constructor.
    /// 
+   /// Use from existing implementations of ICommand:
+   /// 
+   /// If you currently have custom types that implement ICommand,
+   /// you can just use the CommandContext.Invoke() methods to
+   /// execute your commands from your existing ICommand's Execute()
+   /// method.
+   /// 
+   /// You can also derive types from DocumentRelayCommand, and
+   /// override Execute() and CanExecute() to specialize them with
+   /// your custom functionality. Within your override of Execute()
+   /// you can supermessage base.Execute() to run the command in the 
+   /// document execution context, or call CommandContext.Invoke()
+   /// directly.
+   /// 
    /// Roadmap:
    /// 
-   /// 1. Extend IDocumentRelayCommand/<T>:
+   /// 1. Extend IDocumentCommand/<T>:
    /// 
    ///    CanExecute():
    ///    
@@ -108,7 +122,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
 
       /// TT: Modified to execute in document execution context
-      public void Execute(object? parameter)
+      public virtual void Execute(object? parameter)
       {
          CommandContext.Invoke(execute);
       }
@@ -133,8 +147,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
 
       /// TT: Modified to return false if there is no document
+      /// TT: Modified to virtual
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      public bool CanExecute(T? parameter)
+      public virtual bool CanExecute(T? parameter)
       {
          return CommandContext.CanInvoke 
             && this.canExecute?.Invoke(parameter) != false;
@@ -155,8 +170,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
          return CanExecute(result);
       }
 
+      /// TT: Modified to virtual
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      public void Execute(T? parameter)
+      public virtual void Execute(T? parameter)
       {
          CommandContext.Invoke(execute, parameter);
       }
@@ -168,7 +184,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          {
             ThrowArgumentExceptionForInvalidCommandArgument(parameter);
          }
-         CommandContext.Invoke(execute, result);
+         Execute(result);
       }
 
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -277,6 +293,49 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
    public interface IDocumentCommand<in T> : IRelayCommand<T>
    {
+   }
+
+
+   /// <summary>
+   /// An ICommand Implementation that executes a
+   /// single defined AutoCAD command whose name is
+   /// passed into the constructor.
+   /// </summary>
+
+   public class DefinedDocumentCommand : ICommand
+   {
+      string commandName;
+
+      public DefinedDocumentCommand(string commandName)
+      {
+         ArgumentException.ThrowIfNullOrWhiteSpace(commandName);
+         this.commandName = commandName;
+      }
+
+      public event EventHandler? CanExecuteChanged;
+
+      public virtual bool CanExecute(object? parameter)
+      {
+         return CommandContext.IsQuiescent;
+      }
+
+      static Editor Editor
+      {
+         get 
+         {
+            if(docs.MdiActiveDocument == null)
+               throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
+            return docs.MdiActiveDocument.Editor;
+         } 
+      }
+
+      static DocumentCollection docs = Application.DocumentManager;
+
+      public virtual void Execute(object? parameter)
+      {
+         if(!string.IsNullOrWhiteSpace(commandName))
+            CommandContext.Invoke(() => Editor.CommandAsync(commandName));
+      }
    }
 
 }
