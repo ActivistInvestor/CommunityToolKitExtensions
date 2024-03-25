@@ -22,15 +22,21 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// from CommunityToolkit.Mvvm, you can easily migrate your
    /// code to these types by making the following changes:
    /// 
-   ///    Change            To
+   ///    Replace:          With:
    ///    -------------------------------------------------
    ///    RelayCommand      DocumentRelayCommand
    ///    RelayCommand<T>   DocumentRelayCommand<T>
+   ///    
+   /// In most cases the only change needed is the call to the
+   /// constructor of the type.
    ///    
    /// That's all there is to it. After migration, your command
    /// implementation will run in the document execution context,
    /// and your command will only be executable when there is an
    /// active document.
+   /// 
+   /// Note that when your command executes, any currently-active 
+   /// command(s) will be cancelled.
    /// 
    /// Roadmap:
    /// 
