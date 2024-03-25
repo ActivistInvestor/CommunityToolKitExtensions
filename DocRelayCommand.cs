@@ -155,7 +155,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
    static class CommandContext
    {
-      public static void Invoke<T>(Action<T> action, T? parameter)
+      public static async void Invoke<T>(Action<T> action, T? parameter)
       {
          ArgumentNullException.ThrowIfNull(action);
          var docs = Application.DocumentManager;
@@ -163,7 +163,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
          {
-            docs.ExecuteInCommandContextAsync((_) =>
+            await docs.ExecuteInCommandContextAsync((_) =>
             {
                action(parameter);
                return Task.CompletedTask;
@@ -175,7 +175,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
       }
 
-      public static void Invoke(Action action)
+      public static async void Invoke(Action action)
       {
          ArgumentNullException.ThrowIfNull(action);
          var docs = Application.DocumentManager;
@@ -183,7 +183,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
          {
-            docs.ExecuteInCommandContextAsync((_) =>
+            await docs.ExecuteInCommandContextAsync((_) =>
             {
                action();
                return Task.CompletedTask;
