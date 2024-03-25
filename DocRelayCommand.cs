@@ -13,7 +13,22 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// <summary>
    /// AutoCAD-specific implementations of IRelayCommand, and
    /// IRelayCommand<T> from CommunityToolkit.Mvvm that execute 
-   /// the command in the document execution context.
+   /// command code in the document execution context.
+   /// 
+   /// If you are currently using RelayCommand or RelayCommand<T>
+   /// from CommunityToolkit.Mvvm, you can easily migrate your
+   /// code to these types by making the following changes:
+   /// 
+   ///    Change            To
+   ///    -------------------------------------------------
+   ///    RelayCommand      DocRelayCommand
+   ///    RelayCommand<T>   DocRelayCommand<T>
+   ///    
+   /// That's all there is to it. After migration, your command
+   /// implementation will run in the document execution context,
+   /// and your command will only be executable when there is an
+   /// active document.
+   /// 
    /// </summary>
 
    public class DocRelayCommand : CommunityToolkit.Mvvm.Input.IRelayCommand
