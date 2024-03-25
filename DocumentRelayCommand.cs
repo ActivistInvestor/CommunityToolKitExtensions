@@ -14,14 +14,18 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// <summary>
    /// AutoCAD-specific implementations of IRelayCommand, and
    /// IRelayCommand<T> from CommunityToolkit.Mvvm that execute 
-   /// command code in the document execution context.
+   /// command code in the document execution context. Both of
+   /// these implementations also implement ICommand from .NET,
+   /// allowing them to also replace ICommand-based types.
    /// 
    /// If you are currently using RelayCommand or RelayCommand<T>
-   /// from CommunityToolkit.Mvvm, you can easily migrate your
-   /// code to these types by making the following changes:
+   /// from CommunityToolkit.Mvvm, or you are using ICommand from 
+   /// System.Windows.Input, you can easily migrate your code to 
+   /// these types by making the following changes:
    /// 
    ///    Replace:          With:
    ///    -------------------------------------------------
+   ///    ICommand          DocumentRelayCommand
    ///    RelayCommand      DocumentRelayCommand
    ///    RelayCommand<T>   DocumentRelayCommand<T>
    ///    
@@ -78,7 +82,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// 
    /// </summary>
 
-   public class DocumentRelayCommand : IDocumentRelayCommand
+   public class DocumentRelayCommand : IDocumentCommand
    {
       private readonly Action execute;
       private readonly Func<bool>? canExecute;
@@ -110,7 +114,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
    }
 
-   public class DocumentRelayCommand<T> : IDocumentRelayCommand<T>
+   public class DocumentRelayCommand<T> : IDocumentCommand<T>
    {
       private readonly Action<T?> execute;
       private readonly Predicate<T?>? canExecute;
@@ -200,10 +204,24 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
    }
 
+   /// <summary>
+   /// Helper class that also serves to encapsulate
+   /// the use of AutoCAD types  and API calls.
+   /// </summary>
+
    static class CommandContext
    {
+      /// <summary>
+      /// Called from the CanInvoke() implementations above
+      /// </summary>
+
       public static bool CanInvoke =>
          Application.DocumentManager.MdiActiveDocument != null;
+
+      /// <summary>
+      /// Can be used to make an ICommand available only if
+      /// there is no active command in the editor.
+      /// </summary>
 
       public static bool IsQuiescent =>
          CanInvoke && Application.DocumentManager.MdiActiveDocument.Editor.IsQuiescent;
@@ -253,11 +271,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// Placeholders for future AutoCAD-specific extensions
    /// </summary>
    
-   public interface IDocumentRelayCommand : IRelayCommand
+   public interface IDocumentCommand : IRelayCommand
    {
    }
 
-   public interface IDocumentRelayCommand<in T> : IRelayCommand<T>
+   public interface IDocumentCommand<in T> : IRelayCommand<T>
    {
    }
 
