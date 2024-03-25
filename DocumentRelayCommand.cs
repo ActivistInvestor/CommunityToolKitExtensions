@@ -34,7 +34,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// 
    /// Roadmap:
    /// 
-   /// 1. Extend IDocumentCommand/<T>:
+   /// 1. Extend IDocumentRelayCommand/<T>:
    /// 
    ///    CanExecute():
    ///    
