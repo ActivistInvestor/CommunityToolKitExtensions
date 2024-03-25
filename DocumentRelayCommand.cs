@@ -6,7 +6,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using Autodesk.AutoCAD.Runtime;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Autodesk.AutoCAD.ApplicationServices
 {
@@ -30,9 +32,22 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// and your command will only be executable when there is an
    /// active document.
    /// 
+   /// Roadmap:
+   /// 
+   /// 1. Extend IDocumentCommand/<T>:
+   /// 
+   ///    CanExecute():
+   ///    
+   ///      1. Optionally disable command when 
+   ///         the drawing editor is not quiescent.
+   ///      
+   ///      2. Disable the command while it executes
+   ///         to disallow reentry (only needed if the
+   ///         first item above is not implemented).
+   ///         
    /// </summary>
 
-   public class DocumentRelayCommand : CommunityToolkit.Mvvm.Input.IRelayCommand
+   public class DocumentRelayCommand : IDocumentRelayCommand
    {
       private readonly Action execute;
       private readonly Func<bool>? canExecute;
@@ -64,7 +79,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
    }
 
-   public sealed class DocumentRelayCommand<T> : CommunityToolkit.Mvvm.Input.IRelayCommand<T>
+   public class DocumentRelayCommand<T> : IDocumentRelayCommand<T>
    {
       private readonly Action<T?> execute;
       private readonly Predicate<T?>? canExecute;
@@ -200,5 +215,16 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
    }
 
+   /// <summary>
+   /// Placeholders for future AutoCAD-specific extensions
+   /// </summary>
+   
+   public interface IDocumentRelayCommand : IRelayCommand
+   {
+   }
+
+   public interface IDocumentRelayCommand<in T> : IDocumentRelayCommand
+   {
+   }
 
 }
