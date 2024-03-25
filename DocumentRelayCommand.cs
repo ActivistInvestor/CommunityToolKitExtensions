@@ -22,8 +22,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// 
    ///    Change            To
    ///    -------------------------------------------------
-   ///    RelayCommand      DocRelayCommand
-   ///    RelayCommand<T>   DocRelayCommand<T>
+   ///    RelayCommand      DocumentRelayCommand
+   ///    RelayCommand<T>   DocumentRelayCommand<T>
    ///    
    /// That's all there is to it. After migration, your command
    /// implementation will run in the document execution context,
