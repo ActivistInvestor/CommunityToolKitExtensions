@@ -1,12 +1,11 @@
-﻿/// DocRelayCommand.cs 
+﻿/// DocumentRelayCommand.cs 
 /// ActivistInvestor / Tony T.
-/// This code is based on (and dependent on)
+/// This code is based (and dependent on)
 /// types from CommunityToolkit.Mvvm.Input
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Windows.Input;
-using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using CommunityToolkit.Mvvm.Input;
 
@@ -35,131 +34,178 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// That's all there is to it. After migration, your command
    /// implementation will run in the document execution context,
    /// and your command will only be executable when there is an
-   /// active document.
+   /// active document and optionally, if the drawing editor is 
+   /// in a quiescent state.
    /// 
    /// Note that when your command executes, any currently-active 
-   /// command(s) will be cancelled. You can prevent your command
-   /// from executing when a command is in progress by checking the
-   /// CommandContext.IsQuiescent property and factor it into the
-   /// the result of CanExecute() or the delegate passed to the
-   /// constructor.
+   /// command(s) will be cancelled. Since it's possible that the
+   /// delegate that handles the command could interact with the
+   /// user (e.g., call GetXxxxx() methods of the Editor), that
+   /// opens the possiblity for the user to trigger reentry into 
+   /// the command handler. Cancelling the current command serves 
+   /// to eliminate that possiblity.
    /// 
-   /// Use from existing implementations of ICommand:
+   /// You can prevent your command from executing when a command 
+   /// is in progress by setting the QuiescentOnly property to true.
+   /// 
+   /// Usage from existing implementations of ICommand:
    /// 
    /// If you currently have custom types that implement ICommand,
-   /// you can just use the CommandContext.Invoke() methods to
-   /// execute your commands from your existing ICommand's Execute()
-   /// method.
+   /// you can just use the CommandContext.Invoke() method to run
+   /// your commands from your ICommand's Execute() method.
    /// 
-   /// You can also derive types from DocumentRelayCommand, and
-   /// override Execute() and CanExecute() to specialize them with
-   /// your custom functionality. Within your override of Execute()
-   /// you can supermessage base.Execute() to run the command in the 
-   /// document execution context, or call CommandContext.Invoke()
-   /// directly.
+   /// Note that the code below keeps AutoCAD types and API calls 
+   /// out of the ICommand-based types, and encapsulates that in 
+   /// the CommandContext class, maintaining a clear separation 
+   /// based on API depenence. 
    /// 
-   /// Roadmap:
-   /// 
-   /// 1. Extend IDocumentCommand/<T>:
-   /// 
-   ///    CanExecute():
-   ///    
-   ///      1. Optionally disable command when 
-   ///         the drawing editor is not quiescent.
-   ///      
-   ///      2. Disable the command while it executes
-   ///         to disallow reentry (only needed if the
-   ///         first item above is not implemented).
-   ///         
-   /// Best practices for implementing command functionality 
-   /// in MVVM scenarios:
-   /// 
-   /// It is wise to avoid placing command implementation code
-   /// directly in an anonymous delegate passed to the constructor
-   /// of an ICommand, because that prevents use of the code from
-   /// various other non-UI contexts, such as making it available
-   /// as a CommandMethod the user can invoke on the command line.
-   /// 
-   /// To make an implementation usable from various other contexts,
-   /// it can be housed in a separate (possibly static), class that 
-   /// allows it to be accessed from an ICommand, as well as from a 
-   /// CommandMethod.
-   /// 
-   /// Note that in the code below, the AutoCAD-dependent code has
-   /// been decoupled from the IDocumentRelayCommand implementations
-   /// to support that same type of separation, and is what allows 
-   /// the AutoCAD-specific code (in the CommandContext class) to be 
-   /// accessable and usable from various other contexts. This also
-   /// serves to prevent potential design-time failures from occuring 
-   /// due to AutoCAD types appearing in code that may be jit'ed at 
-   /// design-time.
-   /// 
+   /// Doing that serves to support unit testing and also prevent
+   /// potential design-time failures from occuring due to AutoCAD 
+   /// types appearing in code that may be jit'ed at design-time.
    /// </summary>
 
    public class DocumentRelayCommand : IDocumentCommand
    {
       private readonly Action execute;
       private readonly Func<bool>? canExecute;
-      public event EventHandler? CanExecuteChanged;
+      private bool executing = false;
 
-      public DocumentRelayCommand(Action execute, Func<bool>? canExecute = null)
+      public bool QuiescentOnly { get; set; } = false;
+
+      public DocumentRelayCommand(Func<bool>? canExecute, Action execute)
       {
          ArgumentNullException.ThrowIfNull(execute);
          this.execute = execute;
          this.canExecute = canExecute;
       }
 
+      protected bool Executing
+      {
+         get { return executing; }
+         set
+         {
+            if(executing ^ value)
+            {
+               executing = value;
+               NotifyCanExecuteChanged();
+            }
+         }
+      }
+
+      public event EventHandler? CanExecuteChanged;
+
       public void NotifyCanExecuteChanged()
       {
          CanExecuteChanged?.Invoke(this, EventArgs.Empty);
       }
 
-      /// TT: Modified to return false if there is no document
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      /// TT: Modified to return true if:
+      /// 
+      ///     1. A canExecute delegate was supplied to the constructor
+      ///        and it returned true. No other conditions are evaluated.
+      ///        
+      ///     or:
+      ///     
+      ///     1. A canExecute delegate was not supplied to the constructor, and
+      ///     2. There is an active document, and
+      ///     3. The document is quiescent or QuiescentOnly is false, and
+      ///     4. The command is not currently executing.
+      ///
+
       public bool CanExecute(object? parameter)
       {
-         return CommandContext.CanInvoke && this.canExecute?.Invoke() != false;
+         if(canExecute != null)
+            return canExecute();
+         return !Executing && CommandContext.CanInvoke(QuiescentOnly);
       }
 
-      /// TT: Modified to execute in document execution context
-      public virtual void Execute(object? parameter)
+      /// <summary>
+      /// Had to make this async and await Invoke():
+      /// 
+      /// This is done to ensure that any exception
+      /// thrown by the delegate will not be discarded,
+      /// and also because without intimate knowledge,
+      /// one must assume callers expect the command 
+      /// to be completed when this returns.
+      /// </summary>
+
+      public async void Execute(object? parameter)
       {
-         CommandContext.Invoke(execute);
+         Executing = true;
+         try
+         {
+            await CommandContext.Invoke(execute);
+         }
+         finally 
+         { 
+            Executing = false;
+         }
       }
    }
 
    public class DocumentRelayCommand<T> : IDocumentCommand<T>
    {
       private readonly Action<T?> execute;
-      private readonly Predicate<T?>? canExecute;
+      private readonly Func<T?, bool>? canExecute;
+      public bool QuiescentOnly { get; set; } = false;
       public event EventHandler? CanExecuteChanged;
+      bool executing = false;
 
-      public DocumentRelayCommand(Action<T?> execute, Predicate<T?>? canExecute = null)
+      public DocumentRelayCommand(Func<T?, bool>? canExecute, Action<T?> execute)
       {
          ArgumentNullException.ThrowIfNull(execute);
          this.execute = execute;
          this.canExecute = canExecute;
       }
 
+      protected bool Executing
+      {
+         get { return executing;}
+         set
+         {
+            if(executing ^ value)
+            {
+               executing = value;
+               NotifyCanExecuteChanged();
+            }
+         }
+      } 
+
       public void NotifyCanExecuteChanged()
       {
          CanExecuteChanged?.Invoke(this, EventArgs.Empty);
       }
 
-      /// TT: Modified to return false if there is no document
-      /// TT: Modified to virtual
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      public virtual bool CanExecute(T? parameter)
+      /// TT: Modified to return true if:
+      /// 
+      ///     1. A canExecute delegate was supplied to the constructor
+      ///        and it returned true. No other conditions are evaluated.
+      ///        
+      ///     or:
+      ///     
+      ///     1. A canExecute delegate was not supplied to the constructor, and
+      ///     2. There is an active document, and
+      ///     3. The document is quiescent or QuiescentOnly is false, and
+      ///     4. The command is not currently executing.
+      ///
+
+      public bool CanExecute(T? parameter)
       {
-         return CommandContext.CanInvoke 
-            && this.canExecute?.Invoke(parameter) != false;
+         if(canExecute != null)
+            return canExecute(parameter);
+         return !Executing && CommandContext.CanInvoke(QuiescentOnly);
       }
 
+      /// <summary>
+      /// TT: Add this because the original code was 
+      /// evaluating it in every call to CanExecute().
+      /// </summary>
+      static readonly bool argIsNotNullable = default(T) is not null;
+
+      /// TT: I don't like this at all.
       public bool CanExecute(object? parameter)
       {
-         if(!CommandContext.CanInvoke)
-            return false;
-         if(parameter is null && default(T) is not null)
+         if(argIsNotNullable && parameter is null)
          {
             return false;
          }
@@ -170,14 +216,19 @@ namespace Autodesk.AutoCAD.ApplicationServices
          return CanExecute(result);
       }
 
-      /// TT: Modified to virtual
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      public virtual void Execute(T? parameter)
+      public async void Execute(T? parameter)
       {
-         CommandContext.Invoke(execute, parameter);
+         Executing = true;
+         try
+         {
+            await CommandContext.Invoke(execute, parameter);
+         }
+         finally
+         {
+            Executing = false;
+         }
       }
 
-      /// TT: Modified to execute in document execution context
       public void Execute(object? parameter)
       {
          if(!TryGetCommandArgument(parameter, out T? result))
@@ -187,7 +238,6 @@ namespace Autodesk.AutoCAD.ApplicationServices
          Execute(result);
       }
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       internal static bool TryGetCommandArgument(object? parameter, out T? result)
       {
          if(parameter is null && default(T) is null)
@@ -220,34 +270,55 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
    }
 
+
    /// <summary>
-   /// Helper class that also serves to encapsulate
-   /// the use of AutoCAD types  and API calls.
+   /// This class encapsulates and isolates all AutoCAD API-
+   /// dependent functionality. Generally, types that use the
+   /// methods of this class should not contain AutoCAD types 
+   /// or method calls.
    /// </summary>
 
    static class CommandContext
    {
+      static readonly DocumentCollection docs = Application.DocumentManager;
+
       /// <summary>
-      /// Called from the CanInvoke() implementations above
+      /// Gets a value indicating if a command can execute based 
+      /// on conditions of whether there is an open document and 
+      /// its quiescent state.
       /// </summary>
+      /// <param name="quiescentOnly">Allow execution when editor 
+      /// is not quiescent</param>
+      /// <returns>A value indicating if Invoke() can be called</returns>
 
-      public static bool CanInvoke =>
-         Application.DocumentManager.MdiActiveDocument != null;
+      public static bool CanInvoke(bool quiescentOnly = false)
+      {
+         Document? doc = docs.MdiActiveDocument;
+         return doc != null && !quiescentOnly || doc.Editor.IsQuiescent;
+      }
+
+      public static bool CanInvoke(bool quiescentOnly, bool noDocument)
+      {
+         return (noDocument || docs.MdiActiveDocument != null)
+            && (!quiescentOnly || docs.MdiActiveDocument.Editor.IsQuiescent);
+      }
 
       /// <summary>
-      /// Can be used to make an ICommand available only if
-      /// there is no active command in the editor.
+      /// Returns a value indicating if the active 
+      /// document is quiescent.
+      /// Returns false if there is no document.
       /// </summary>
 
       public static bool IsQuiescent =>
-         CanInvoke && Application.DocumentManager.MdiActiveDocument.Editor.IsQuiescent;
+         docs.MdiActiveDocument?.Editor.IsQuiescent == true;
 
-      public static async void Invoke<T>(Action<T?> action, T? parameter)
+      public static bool HasDocument => docs.MdiActiveDocument != null;
+
+      public static async Task Invoke<T>(Action<T?> action, T? parameter = default)
       {
          ArgumentNullException.ThrowIfNull(action);
-         if(!CanInvoke)
+         if(docs.MdiActiveDocument == null)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
-         var docs = Application.DocumentManager;
          if(docs.IsApplicationContext)
          {
             await docs.ExecuteInCommandContextAsync((_) =>
@@ -262,12 +333,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
       }
 
-      public static async void Invoke(Action action)
+      public static async Task Invoke(Action action)
       {
          ArgumentNullException.ThrowIfNull(action);
-         if(!CanInvoke)
+         if(docs.MdiActiveDocument == null)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
-         var docs = Application.DocumentManager;
          if(docs.IsApplicationContext)
          {
             await docs.ExecuteInCommandContextAsync((_) =>
@@ -281,61 +351,115 @@ namespace Autodesk.AutoCAD.ApplicationServices
             action();
          }
       }
+
    }
 
    /// <summary>
    /// Placeholders for future AutoCAD-specific extensions
    /// </summary>
-   
+
    public interface IDocumentCommand : IRelayCommand
    {
+      /// <summary>
+      /// Gets/sets a value indicating if the command can
+      /// execute only when the editor is quiescent.
+      /// </summary>
+      public bool QuiescentOnly { get; set; }
    }
 
-   public interface IDocumentCommand<in T> : IRelayCommand<T>
+   public interface IDocumentCommand<in T> : IDocumentCommand 
    {
    }
 
 
    /// <summary>
-   /// An ICommand Implementation that executes a
-   /// single defined AutoCAD command whose name is
-   /// passed into the constructor.
+   /// Experimental:
+   /// 
+   /// An ICommand Implementation that executes a defined 
+   /// AutoCAD command whose CommandMethod method is passed
+   /// into the constructor. 
+   /// 
+   /// The method passed into the constructor must be static, 
+   /// and must have the CommandMethod attribute applied to it.
+   /// 
+   /// If the CommandMethod attribute applied to the method
+   /// has CommandFlags.Session in its command flags, then
+   /// the method will be invoked in the application context.
+   /// Otherwise, it is invoked in the document context.
+   /// 
+   /// This type cannot support non-static command methods,
+   /// because Autodesk did not provide a way to access the
+   /// instance of the containing type that it creates for 
+   /// each document, when the containing type contains one
+   /// or more non-static command methods.
+   /// 
+   /// Unless there is a need for per-document state or per-
+   /// document events, non-static command methods should be 
+   /// avoided.
    /// </summary>
 
-   public class DefinedDocumentCommand : ICommand
+   public class CommandMethodCommand : IDocumentCommand
    {
-      string commandName;
+      Action commandMethod;
+      bool appContext = false;
+      bool executing = false;
 
-      public DefinedDocumentCommand(string commandName)
+      public CommandMethodCommand(Action commandMethod)
       {
-         ArgumentException.ThrowIfNullOrWhiteSpace(commandName);
-         this.commandName = commandName;
+         ArgumentNullException.ThrowIfNull(commandMethod);
+         MethodInfo m = commandMethod.GetMethodInfo();
+         if(!m.IsStatic)
+            throw new ArgumentException("Requires a static CommandMethod");
+         CommandMethodAttribute? att = m.GetCustomAttribute<CommandMethodAttribute>();
+         if(att == null)
+            throw new ArgumentException("Requires a static CommandMethod");
+         appContext = att.Flags.HasFlag(CommandFlags.Session);
+         this.commandMethod = commandMethod;
       }
+
+      protected bool Executing
+      {
+         get { return executing; }
+         set
+         {
+            if(executing ^ value)
+            {
+               executing = value;
+               NotifyCanExecuteChanged();
+            }
+         }
+      }
+
+      public bool QuiescentOnly { get; set;}
 
       public event EventHandler? CanExecuteChanged;
 
       public virtual bool CanExecute(object? parameter)
       {
-         return CommandContext.IsQuiescent;
+         return CommandContext.CanInvoke(QuiescentOnly);
       }
 
-      static Editor Editor
+      public virtual async void Execute(object? parameter)
       {
-         get 
+         Executing = false;
+         try
          {
-            if(docs.MdiActiveDocument == null)
-               throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
-            return docs.MdiActiveDocument.Editor;
-         } 
+            if(appContext)
+               commandMethod.Invoke();
+            else
+               await CommandContext.Invoke(() => commandMethod.Invoke());
+         }
+         finally
+         { 
+            Executing = true; 
+         }
       }
 
-      static DocumentCollection docs = Application.DocumentManager;
-
-      public virtual void Execute(object? parameter)
+      public void NotifyCanExecuteChanged()
       {
-         if(!string.IsNullOrWhiteSpace(commandName))
-            CommandContext.Invoke(() => Editor.CommandAsync(commandName));
+         CanExecuteChanged?.Invoke(this, EventArgs.Empty);
       }
    }
+
 
 }
