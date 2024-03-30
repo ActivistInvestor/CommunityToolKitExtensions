@@ -1,6 +1,6 @@
 ﻿/// LegacyDocumentRelayCommand.cs 
 /// ActivistInvestor / Tony T.
-/// This code is based (and dependent on)
+/// This code is based on 
 /// types from CommunityToolkit.Mvvm.Input
 /// 
 /// This version of DocumentRelayCommand is
