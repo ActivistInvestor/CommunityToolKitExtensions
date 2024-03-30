@@ -291,16 +291,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// is not quiescent</param>
       /// <returns>A value indicating if Invoke() can be called</returns>
 
-      public static bool CanInvoke(bool quiescentOnly = false)
+      public static bool CanInvoke(bool quiescentOnly = false, bool documentRequired = true)
       {
          Document? doc = docs.MdiActiveDocument;
-         return doc != null && !quiescentOnly || doc.Editor.IsQuiescent;
-      }
-
-      public static bool CanInvoke(bool quiescentOnly, bool noDocument)
-      {
-         return (noDocument || docs.MdiActiveDocument != null)
-            && (!quiescentOnly || docs.MdiActiveDocument.Editor.IsQuiescent);
+         return (!documentRequired || doc != null)
+            && (!quiescentOnly || doc.Editor.IsQuiescent);
       }
 
       /// <summary>
@@ -436,7 +431,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public virtual bool CanExecute(object? parameter)
       {
-         return CommandContext.CanInvoke(QuiescentOnly);
+         return !Executing && CommandContext.CanInvoke(QuiescentOnly);
       }
 
       public virtual async void Execute(object? parameter)
