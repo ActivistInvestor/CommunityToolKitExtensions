@@ -275,7 +275,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// This class encapsulates and isolates all AutoCAD API-
    /// dependent functionality. Generally, types that use the
    /// methods of this class should not contain AutoCAD types 
-   /// or method calls.
+   /// or method calls, espcially if they contain methods that
+   /// can be jit'd at design-time.
    /// </summary>
 
    internal static class CommandContext
@@ -283,9 +284,15 @@ namespace Autodesk.AutoCAD.ApplicationServices
       static readonly DocumentCollection docs = Application.DocumentManager;
 
       /// <summary>
-      /// Gets a value indicating if a command can execute based 
-      /// on conditions of whether there is an open document and 
-      /// its quiescent state.
+      /// Gets a value indicating if a command can execute 
+      /// based on two conditions:
+      /// 
+      ///   1. If there is an open document.
+      ///   2. If there is an open document 
+      ///      that is in a quiescent state.
+      ///      
+      /// The arguments specify which of the conditions are
+      /// applicable and tested.
       /// </summary>
       /// <param name="quiescentOnly">A value indicating if the
       /// operation cannot be performed if the document is not 
@@ -329,6 +336,14 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
       }
 
+      /// <summary>
+      /// Invokes the given action in the document execution context
+      /// </summary>
+      /// <typeparam name="T">The type of the argument passed to the action</typeparam>
+      /// <param name="action">The action to execute</param>
+      /// <param name="parameter">The value to pass as the parameter to the action</param>
+      /// <returns>A Task</returns>
+      /// <exception cref="Autodesk.AutoCAD.Runtime.Exception"></exception>
       public static async Task Invoke<T>(Action<T?> action, T? parameter = default)
       {
          ArgumentNullException.ThrowIfNull(action);
@@ -347,6 +362,13 @@ namespace Autodesk.AutoCAD.ApplicationServices
             action(parameter);
          }
       }
+
+      /// <summary>
+      /// Invokes the given action in the document execution context
+      /// </summary>
+      /// <param name="action">The action to execute</param>
+      /// <returns>A Task</returns>
+      /// <exception cref="Autodesk.AutoCAD.Runtime.Exception"></exception>
 
       public static async Task Invoke(Action action)
       {
@@ -382,7 +404,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public bool QuiescentOnly { get; set; }
    }
 
-   public interface IDocumentCommand<in T> : IDocumentCommand 
+   public interface IDocumentCommand<in T> : IDocumentCommand, IRelayCommand<T> 
    {
    }
 
