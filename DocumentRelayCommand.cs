@@ -278,7 +278,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// or method calls.
    /// </summary>
 
-   static class CommandContext
+   internal static class CommandContext
    {
       static readonly DocumentCollection docs = Application.DocumentManager;
 
@@ -287,9 +287,12 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// on conditions of whether there is an open document and 
       /// its quiescent state.
       /// </summary>
-      /// <param name="quiescentOnly">Allow execution when editor 
-      /// is not quiescent</param>
-      /// <returns>A value indicating if Invoke() can be called</returns>
+      /// <param name="quiescentOnly">A value indicating if the
+      /// operation cannot be performed if the document is not 
+      /// quiescent</param>
+      /// <param name="documentRequired">A value indicating if the
+      /// operation can be performed if there is no active document</param>
+      /// <returns>A value indicating if the operation can be performed</returns>
 
       public static bool CanInvoke(bool quiescentOnly = false, bool documentRequired = true)
       {
@@ -307,7 +310,24 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public static bool IsQuiescent =>
          docs.MdiActiveDocument?.Editor.IsQuiescent == true;
 
+      /// <summary>
+      /// Return a value indicating if there is an active document
+      /// </summary>
       public static bool HasDocument => docs.MdiActiveDocument != null;
+
+      /// <summary>
+      /// Return a value indicating if there is an active document
+      /// and it is quiescent.
+      /// </summary>
+      
+      public static bool HasQuiescentDocument
+      {
+         get
+         {
+            var doc = docs.MdiActiveDocument;
+            return doc != null && doc.Editor.IsQuiescent;
+         }
+      }
 
       public static async Task Invoke<T>(Action<T?> action, T? parameter = default)
       {
