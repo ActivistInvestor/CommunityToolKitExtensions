@@ -1,10 +1,16 @@
-﻿/// DocumentRelayCommand.cs 
+﻿/// LegacyDocumentRelayCommand.cs 
 /// ActivistInvestor / Tony T.
 /// This code is based (and dependent on)
 /// types from CommunityToolkit.Mvvm.Input
+/// 
+/// This version of DocumentRelayCommand is
+/// compatible with earlier versions of the 
+/// .NET framework.
 
+using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using Autodesk.AutoCAD.Runtime;
 using CommunityToolkit.Mvvm.Input;
 
@@ -145,13 +151,13 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
    public class DocumentRelayCommand<T> : IDocumentCommand<T>
    {
-      private readonly Action<T?> execute;
-      private readonly Func<T?, bool>? canExecute;
+      private readonly Action<T> execute;
+      private readonly Func<T, bool>? canExecute;
       public bool QuiescentOnly { get; set; } = false;
       public event EventHandler? CanExecuteChanged;
       bool executing = false;
 
-      public DocumentRelayCommand(Func<T?, bool>? canExecute, Action<T?> execute)
+      public DocumentRelayCommand(Func<T, bool>? canExecute, Action<T> execute)
       {
          if(execute == null)
             throw new ArgumentNullException(nameof(execute));
@@ -190,7 +196,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       ///     4. The command is not currently executing.
       ///
 
-      public bool CanExecute(T? parameter)
+      public bool CanExecute(T parameter)
       {
          if(canExecute != null)
             return canExecute(parameter);
@@ -201,7 +207,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// TT: Add this because the original code was 
       /// evaluating it in every call to CanExecute().
       /// </summary>
-      static readonly bool argIsNotNullable = default(T) is not null;
+      static readonly bool argIsNotNullable = default(T) != null;
 
       /// TT: I don't like this at all.
       public bool CanExecute(object? parameter)
@@ -210,14 +216,14 @@ namespace Autodesk.AutoCAD.ApplicationServices
          {
             return false;
          }
-         if(!TryGetCommandArgument(parameter, out T? result))
+         if(!TryGetCommandArgument(parameter, out T result))
          {
             ThrowArgumentExceptionForInvalidCommandArgument(parameter);
          }
          return CanExecute(result);
       }
 
-      public async void Execute(T? parameter)
+      public async void Execute(T parameter)
       {
          Executing = true;
          try
@@ -232,14 +238,14 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public void Execute(object? parameter)
       {
-         if(!TryGetCommandArgument(parameter, out T? result))
+         if(!TryGetCommandArgument(parameter, out T result))
          {
             ThrowArgumentExceptionForInvalidCommandArgument(parameter);
          }
          Execute(result);
       }
 
-      internal static bool TryGetCommandArgument(object? parameter, out T? result)
+      internal static bool TryGetCommandArgument(object? parameter, out T result)
       {
          if(parameter is null && default(T) is null)
          {
@@ -258,7 +264,6 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// [DoesNotReturn]
       internal static void ThrowArgumentExceptionForInvalidCommandArgument(object? parameter)
       {
-         [MethodImpl(MethodImplOptions.NoInlining)]
          static System.Exception GetException(object? parameter)
          {
             if(parameter is null)
@@ -345,7 +350,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// <param name="parameter">The value to pass as the parameter to the action</param>
       /// <returns>A Task</returns>
       /// <exception cref="Autodesk.AutoCAD.Runtime.Exception"></exception>
-      public static async Task Invoke<T>(Action<T?> action, T? parameter = default)
+      public static async Task Invoke<T>(Action<T> action, T parameter = default)
       {
          if(action == null)
             throw new ArgumentNullException(nameof(action));
@@ -353,7 +358,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
          {
-            await docs.ExecuteInCommandContextAsync((_) =>
+            await docs.ExecuteInCommandContextAsync((unused) =>
             {
                action(parameter);
                return Task.CompletedTask;
@@ -380,7 +385,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
          {
-            await docs.ExecuteInCommandContextAsync((_) =>
+            await docs.ExecuteInCommandContextAsync((unused) =>
             {
                action();
                return Task.CompletedTask;
