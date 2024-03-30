@@ -79,10 +79,10 @@ namespace Autodesk.AutoCAD.ApplicationServices
          this.canExecute = canExecute;
       }
 
-      protected bool Executing
+      public bool Executing
       {
          get { return executing; }
-         set
+         protected set
          {
             if(executing ^ value)
             {
@@ -158,10 +158,10 @@ namespace Autodesk.AutoCAD.ApplicationServices
          this.canExecute = canExecute;
       }
 
-      protected bool Executing
+      public bool Executing
       {
-         get { return executing;}
-         set
+         get { return executing; }
+         protected set
          {
             if(executing ^ value)
             {
