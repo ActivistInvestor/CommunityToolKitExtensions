@@ -398,13 +398,13 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// avoided.
    /// </summary>
 
-   public class CommandMethodCommand : IDocumentCommand
+   public class RegisteredCommand : IDocumentCommand
    {
       Action commandMethod;
       bool appContext = false;
       bool executing = false;
 
-      public CommandMethodCommand(Action commandMethod)
+      public RegisteredCommand(Action commandMethod)
       {
          ArgumentNullException.ThrowIfNull(commandMethod);
          MethodInfo m = commandMethod.GetMethodInfo();
