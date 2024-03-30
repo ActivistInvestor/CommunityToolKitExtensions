@@ -445,9 +445,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
          try
          {
             if(appContext)
-               commandMethod.Invoke();
+               commandMethod();
             else
-               await CommandContext.Invoke(() => commandMethod.Invoke());
+               await CommandContext.Invoke(() => commandMethod());
          }
          finally
          { 
