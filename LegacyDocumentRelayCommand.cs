@@ -1,6 +1,6 @@
 ﻿/// LegacyDocumentRelayCommand.cs 
 /// ActivistInvestor / Tony T.
-/// This code is based on 
+/// This code is based (and dependent on)
 /// types from CommunityToolkit.Mvvm.Input
 /// 
 /// This version of DocumentRelayCommand is
@@ -11,6 +11,7 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Autodesk.AutoCAD.Runtime;
 
 namespace Autodesk.AutoCAD.ApplicationServices
@@ -402,15 +403,17 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// Placeholders for future AutoCAD-specific extensions
    /// </summary>
 
-   public interface IDocumentCommand 
+   /// [TT 3/30/24]: Fixed bug (missing base ICommand interface)
+   
+   public interface IDocumentCommand : ICommand
    {
       /// <summary>
       /// Gets/sets a value indicating if the command can
       /// execute only when the editor is quiescent.
       /// </summary>
+      
       bool QuiescentOnly { get; set; }
       void NotifyCanExecuteChanged();
-
    }
 
    public interface IDocumentCommand<in T> : IDocumentCommand
