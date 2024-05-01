@@ -11,8 +11,8 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Autodesk.AutoCAD.Runtime;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Autodesk.AutoCAD.ApplicationServices
 {
@@ -72,12 +72,12 @@ namespace Autodesk.AutoCAD.ApplicationServices
    public class DocumentRelayCommand : IDocumentCommand
    {
       private readonly Action execute;
-      private readonly Func<bool> canExecute;
+      private readonly Func<bool>? canExecute;
       private bool executing = false;
 
       public bool QuiescentOnly { get; set; } = false;
 
-      public DocumentRelayCommand(Func<bool> canExecute, Action execute)
+      public DocumentRelayCommand(Func<bool>? canExecute, Action execute)
       {
          if(execute == null)
             throw new ArgumentNullException(nameof(execute));
@@ -98,7 +98,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
       }
 
-      public event EventHandler CanExecuteChanged;
+      public event EventHandler? CanExecuteChanged;
 
       public void NotifyCanExecuteChanged()
       {
@@ -118,7 +118,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       ///     4. The command is not currently executing.
       ///
 
-      public bool CanExecute(object parameter)
+      public bool CanExecute(object? parameter)
       {
          if(canExecute != null)
             return canExecute();
@@ -135,7 +135,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// to be completed when this returns.
       /// </summary>
 
-      public async void Execute(object parameter)
+      public async void Execute(object? parameter)
       {
          Executing = true;
          try
@@ -152,12 +152,12 @@ namespace Autodesk.AutoCAD.ApplicationServices
    public class DocumentRelayCommand<T> : IDocumentCommand<T>
    {
       private readonly Action<T> execute;
-      private readonly Func<T, bool> canExecute;
+      private readonly Func<T, bool>? canExecute;
       public bool QuiescentOnly { get; set; } = false;
-      public event EventHandler CanExecuteChanged;
+      public event EventHandler? CanExecuteChanged;
       bool executing = false;
 
-      public DocumentRelayCommand(Func<T, bool> canExecute, Action<T> execute)
+      public DocumentRelayCommand(Func<T, bool>? canExecute, Action<T> execute)
       {
          if(execute == null)
             throw new ArgumentNullException(nameof(execute));
@@ -210,7 +210,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       static readonly bool argIsNotNullable = default(T) != null;
 
       /// TT: I don't like this at all.
-      public bool CanExecute(object parameter)
+      public bool CanExecute(object? parameter)
       {
          if(argIsNotNullable && parameter is null)
          {
@@ -236,7 +236,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
       }
 
-      public void Execute(object parameter)
+      public void Execute(object? parameter)
       {
          if(!TryGetCommandArgument(parameter, out T result))
          {
@@ -245,9 +245,9 @@ namespace Autodesk.AutoCAD.ApplicationServices
          Execute(result);
       }
 
-      internal static bool TryGetCommandArgument(object parameter, out T result)
+      internal static bool TryGetCommandArgument(object? parameter, out T result)
       {
-         if(parameter is null && default(T) == null)
+         if(parameter is null && default(T) is null)
          {
             result = default;
             return true;
@@ -262,15 +262,15 @@ namespace Autodesk.AutoCAD.ApplicationServices
       }
 
       /// [DoesNotReturn]
-      internal static void ThrowArgumentExceptionForInvalidCommandArgument(object parameter)
+      internal static void ThrowArgumentExceptionForInvalidCommandArgument(object? parameter)
       {
-         System.Exception GetException(object argument)
+         static System.Exception GetException(object? parameter)
          {
-            if(argument is null)
+            if(parameter is null)
             {
-               return new ArgumentException($"Parameter \"{nameof(argument)}\" (object) must not be null, as the command type requires an argument of type {typeof(T)}.", nameof(argument));
+               return new ArgumentException($"Parameter \"{nameof(parameter)}\" (object) must not be null, as the command type requires an argument of type {typeof(T)}.", nameof(parameter));
             }
-            return new ArgumentException($"Parameter \"{nameof(argument)}\" (object) cannot be of type {argument.GetType()}, as the command type requires an argument of type {typeof(T)}.", nameof(argument));
+            return new ArgumentException($"Parameter \"{nameof(parameter)}\" (object) cannot be of type {parameter.GetType()}, as the command type requires an argument of type {typeof(T)}.", nameof(parameter));
          }
          throw GetException(parameter);
       }
@@ -309,9 +309,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public static bool CanInvoke(bool quiescentOnly = false, bool documentRequired = true)
       {
-         Document doc = docs.MdiActiveDocument;
-         return (!documentRequired || doc != null)
-            && (!quiescentOnly || doc.Editor.IsQuiescent);
+         Document? doc = docs.MdiActiveDocument;
+         return doc == null ? !documentRequired : !quiescentOnly || doc.Editor.IsQuiescent;
       }
 
       /// <summary>
@@ -403,23 +402,17 @@ namespace Autodesk.AutoCAD.ApplicationServices
    /// Placeholders for future AutoCAD-specific extensions
    /// </summary>
 
-   /// [TT 3/30/24]: Fixed bug (missing base ICommand interface)
-   
-   public interface IDocumentCommand : ICommand
+   public interface IDocumentCommand : IRelayCommand
    {
       /// <summary>
       /// Gets/sets a value indicating if the command can
       /// execute only when the editor is quiescent.
       /// </summary>
-      
-      bool QuiescentOnly { get; set; }
-      void NotifyCanExecuteChanged();
+      public bool QuiescentOnly { get; set; }
    }
 
-   public interface IDocumentCommand<in T> : IDocumentCommand
+   public interface IDocumentCommand<in T> : IRelayCommand<T>, IDocumentCommand
    {
-      bool CanExecute(T parameter);
-      void Execute(T parameter);
    }
 
 
@@ -462,7 +455,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          MethodInfo m = commandMethod.GetMethodInfo();
          if(!m.IsStatic)
             throw new ArgumentException("Requires a static CommandMethod");
-         CommandMethodAttribute att = m.GetCustomAttribute<CommandMethodAttribute>();
+         CommandMethodAttribute? att = m.GetCustomAttribute<CommandMethodAttribute>();
          if(att == null)
             throw new ArgumentException("Requires a static CommandMethod");
          appContext = att.Flags.HasFlag(CommandFlags.Session);
@@ -484,14 +477,14 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public bool QuiescentOnly { get; set;}
 
-      public event EventHandler CanExecuteChanged;
+      public event EventHandler? CanExecuteChanged;
 
-      public virtual bool CanExecute(object parameter)
+      public virtual bool CanExecute(object? parameter)
       {
          return !Executing && CommandContext.CanInvoke(QuiescentOnly);
       }
 
-      public virtual async void Execute(object parameter)
+      public virtual async void Execute(object? parameter)
       {
          Executing = false;
          try
