@@ -3,7 +3,6 @@
 /// This code is based (and dependent on)
 /// types from CommunityToolkit.Mvvm.Input
 
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Autodesk.AutoCAD.Runtime;
@@ -74,7 +73,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public DocumentRelayCommand(Func<bool>? canExecute, Action execute)
       {
-         ArgumentNullException.ThrowIfNull(execute);
+         if(execute == null)
+            throw new ArgumentNullException(nameof(execute));
          this.execute = execute;
          this.canExecute = canExecute;
       }
@@ -153,7 +153,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public DocumentRelayCommand(Func<T?, bool>? canExecute, Action<T?> execute)
       {
-         ArgumentNullException.ThrowIfNull(execute);
+         if(execute == null)
+            throw new ArgumentNullException(nameof(execute));
          this.execute = execute;
          this.canExecute = canExecute;
       }
@@ -181,7 +182,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       ///     1. A canExecute delegate was supplied to the constructor
       ///        and it returned true. No other conditions are evaluated.
       ///        
-      ///     or:
+      ///   Or:
       ///     
       ///     1. A canExecute delegate was not supplied to the constructor, and
       ///     2. There is an active document, and
@@ -254,7 +255,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          return false;
       }
 
-      [DoesNotReturn]
+      /// [DoesNotReturn]
       internal static void ThrowArgumentExceptionForInvalidCommandArgument(object? parameter)
       {
          [MethodImpl(MethodImplOptions.NoInlining)]
@@ -304,8 +305,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public static bool CanInvoke(bool quiescentOnly = false, bool documentRequired = true)
       {
          Document? doc = docs.MdiActiveDocument;
-         return (!documentRequired || doc != null)
-            && (!quiescentOnly || doc.Editor.IsQuiescent);
+         return doc == null ? !documentRequired
+            : !quiescentOnly || doc.Editor.IsQuiescent;
       }
 
       /// <summary>
@@ -344,9 +345,11 @@ namespace Autodesk.AutoCAD.ApplicationServices
       /// <param name="parameter">The value to pass as the parameter to the action</param>
       /// <returns>A Task</returns>
       /// <exception cref="Autodesk.AutoCAD.Runtime.Exception"></exception>
+
       public static async Task Invoke<T>(Action<T?> action, T? parameter = default)
       {
-         ArgumentNullException.ThrowIfNull(action);
+         if(action == null)
+            throw new ArgumentNullException(nameof(action));
          if(docs.MdiActiveDocument == null)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
@@ -372,7 +375,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public static async Task Invoke(Action action)
       {
-         ArgumentNullException.ThrowIfNull(action);
+         if(action == null)
+            throw new ArgumentNullException(nameof(action));
          if(docs.MdiActiveDocument == null)
             throw new Autodesk.AutoCAD.Runtime.Exception(ErrorStatus.NoDocument);
          if(docs.IsApplicationContext)
@@ -404,7 +408,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
       public bool QuiescentOnly { get; set; }
    }
 
-   public interface IDocumentCommand<in T> : IDocumentCommand, IRelayCommand<T> 
+   public interface IDocumentCommand<in T> : IRelayCommand<T>, IDocumentCommand
    {
    }
 
@@ -443,7 +447,8 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public RegisteredCommand(Action commandMethod)
       {
-         ArgumentNullException.ThrowIfNull(commandMethod);
+         if(commandMethod == null)
+            throw new ArgumentNullException(nameof(commandMethod));
          MethodInfo m = commandMethod.GetMethodInfo();
          if(!m.IsStatic)
             throw new ArgumentException("Requires a static CommandMethod");
@@ -478,7 +483,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
 
       public virtual async void Execute(object? parameter)
       {
-         Executing = false;
+         Executing = true;
          try
          {
             if(appContext)
@@ -488,7 +493,7 @@ namespace Autodesk.AutoCAD.ApplicationServices
          }
          finally
          { 
-            Executing = true; 
+            Executing = false; 
          }
       }
 
@@ -497,6 +502,5 @@ namespace Autodesk.AutoCAD.ApplicationServices
          CanExecuteChanged?.Invoke(this, EventArgs.Empty);
       }
    }
-
 
 }
